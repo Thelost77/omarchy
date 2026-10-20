@@ -19,7 +19,7 @@ run_migration() {
     XDG_DATA_HOME="$test_home/.local/share" \
     XDG_STATE_HOME="$test_home/.local/state" \
     MISE_PARANOID="${OMARCHY_TEST_MISE_PARANOID:-false}" \
-    PATH=/usr/bin \
+    PATH="$ROOT/bin:${OMARCHY_TEST_PATH:-/usr/bin}" \
     bash -euo pipefail "$migration"
 }
 
@@ -268,3 +268,30 @@ run_migration "$symlink_home" >/dev/null
 grep -F '{{ cwd }}/bin' "$symlink_target" >/dev/null && fail "symlink target retains the unsafe path"
 grep -Fx 'KEEP = "yes"' "$symlink_target" >/dev/null || fail "symlink target keeps unrelated settings"
 pass "custom dotfile symlinks survive the repair"
+
+no_mise_path="$test_dir/usr-bin-without-mise"
+mkdir "$no_mise_path"
+ln -s "$(realpath /usr/bin)"/* "$no_mise_path/"
+rm -f "$no_mise_path/mise"
+! PATH="$no_mise_path" command -v mise >/dev/null 2>&1 || fail "the PATH built for a machine without mise still finds one"
+
+removed_home="$test_dir/removed-home"
+removed_config="$removed_home/Work/.mise.toml"
+removed_project="$removed_home/Work/tries/untrusted-repository"
+mkdir -p "$removed_project/bin"
+printf '[env]\n_.path = "{{ cwd }}/bin"\n' >"$removed_config"
+OMARCHY_TEST_PATH="$no_mise_path" run_migration "$removed_home" >/dev/null || fail "migration without Mise or a Work trust grant completes"
+[[ ! -e $removed_config ]] || fail "migration without Mise removes the stock Work config"
+pass "without Mise and without a Work trust grant the migration completes"
+
+printf '[env]\n_.path = "{{ cwd }}/bin"\n' >"$removed_config"
+run_mise "$removed_home" trust "$removed_config" >/dev/null
+mise_path_active "$removed_home" "$removed_project" || fail "trusted legacy config prepends the repository bin directory"
+OMARCHY_TEST_PATH="$no_mise_path" run_migration "$removed_home" >"$test_dir/removed-output" 2>&1 && fail "migration without Mise completes while a Work trust grant remains"
+grep -F "omarchy pkg add mise-bin" "$test_dir/removed-output" >/dev/null || fail "migration without Mise names how to install it" "$(cat "$test_dir/removed-output")"
+run_migration "$removed_home" >/dev/null
+printf '[env]\n_.path = "{{ cwd }}/bin"\n' >"$removed_config"
+if mise_path_active "$removed_home" "$removed_project"; then
+  fail "Work trust grant left without Mise is revoked once Mise is back"
+fi
+pass "without Mise the migration stays pending while a Work trust grant remains"
