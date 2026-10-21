@@ -19,6 +19,7 @@ run_migration() {
     XDG_DATA_HOME="$test_home/.local/share" \
     XDG_STATE_HOME="$test_home/.local/state" \
     MISE_PARANOID="${OMARCHY_TEST_MISE_PARANOID:-false}" \
+    ${OMARCHY_TEST_MISE_STATE_DIR:+"MISE_STATE_DIR=$OMARCHY_TEST_MISE_STATE_DIR"} \
     PATH="$ROOT/bin:${OMARCHY_TEST_PATH:-/usr/bin}" \
     bash -euo pipefail "$migration"
 }
@@ -34,6 +35,7 @@ run_mise() {
     XDG_DATA_HOME="$test_home/.local/share" \
     XDG_STATE_HOME="$test_home/.local/state" \
     MISE_PARANOID="${OMARCHY_TEST_MISE_PARANOID:-false}" \
+    ${OMARCHY_TEST_MISE_STATE_DIR:+"MISE_STATE_DIR=$OMARCHY_TEST_MISE_STATE_DIR"} \
     PATH=/usr/bin \
     mise "$@"
 }
@@ -295,3 +297,14 @@ if mise_path_active "$removed_home" "$removed_project"; then
   fail "Work trust grant left without Mise is revoked once Mise is back"
 fi
 pass "without Mise the migration stays pending while a Work trust grant remains"
+
+tilde_home="$test_dir/tilde-home"
+tilde_config="$tilde_home/Work/.mise.toml"
+mkdir -p "$tilde_home/Work"
+printf '[env]\n_.path = "{{ cwd }}/bin"\n' >"$tilde_config"
+OMARCHY_TEST_MISE_STATE_DIR='~/mise-state' run_mise "$tilde_home" trust "$tilde_config" >/dev/null
+[[ -d $tilde_home/mise-state/trusted-configs ]] || fail "Mise expands a leading ~/ in MISE_STATE_DIR"
+if OMARCHY_TEST_MISE_STATE_DIR='~/mise-state' OMARCHY_TEST_PATH="$no_mise_path" run_migration "$tilde_home" >/dev/null 2>&1; then
+  fail "migration without Mise finds a Work trust grant under a MISE_STATE_DIR that starts with ~/"
+fi
+pass "without Mise the migration finds a Work trust grant under a MISE_STATE_DIR that starts with ~/"

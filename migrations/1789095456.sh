@@ -18,6 +18,10 @@ fi
 was_ignored=false
 if [[ -d $work_dir ]]; then
   mise_state_dir=${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}
+  # Mise expands a leading ~/ that a value set outside a shell leaves literal.
+  if [[ $mise_state_dir == "~/"* ]]; then
+    mise_state_dir="$HOME/${mise_state_dir#"~/"}"
+  fi
   work_target=$(readlink -m "$work_dir")
   config_path_target="$work_target/.mise.toml"
   config_target=$(readlink -m "$mise_config")
