@@ -304,7 +304,8 @@ mkdir -p "$tilde_home/Work"
 printf '[env]\n_.path = "{{ cwd }}/bin"\n' >"$tilde_config"
 OMARCHY_TEST_MISE_STATE_DIR='~/mise-state' run_mise "$tilde_home" trust "$tilde_config" >/dev/null
 [[ -d $tilde_home/mise-state/trusted-configs ]] || fail "Mise expands a leading ~/ in MISE_STATE_DIR"
-if OMARCHY_TEST_MISE_STATE_DIR='~/mise-state' OMARCHY_TEST_PATH="$no_mise_path" run_migration "$tilde_home" >/dev/null 2>&1; then
+if OMARCHY_TEST_MISE_STATE_DIR='~/mise-state' OMARCHY_TEST_PATH="$no_mise_path" run_migration "$tilde_home" >"$test_dir/tilde-output" 2>&1; then
   fail "migration without Mise finds a Work trust grant under a MISE_STATE_DIR that starts with ~/"
 fi
+grep -F "Mise is needed to revoke its trust" "$test_dir/tilde-output" >/dev/null || fail "migration without Mise stops for the Work trust grant under a MISE_STATE_DIR that starts with ~/" "$(cat "$test_dir/tilde-output")"
 pass "without Mise the migration finds a Work trust grant under a MISE_STATE_DIR that starts with ~/"
